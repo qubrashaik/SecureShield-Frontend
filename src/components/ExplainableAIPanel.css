@@ -1,0 +1,486 @@
+/* =====================================================================
+   ExplainableAIPanel.css
+   Every class is prefixed `xai-` so nothing clashes with other components.
+   Colours live in the variables below; change them here, not in the JSX.
+   The tokens build on your global ones from index.css (--input-bg,
+   --panel-border, --text-primary, --text-muted, --font-mono).
+   ===================================================================== */
+
+/* ---------------------------------------------------------------
+   Theme tokens (light theme, matching the rest of the app)
+   --------------------------------------------------------------- */
+.xai-panel {
+  /* Cards sit inside the white .panel, so they use the soft slate fill */
+  --xai-card-bg: var(--input-bg, #f8fafc);
+  --xai-card-border: var(--panel-border, #e2e8f0);
+
+  /* Body/title text is pinned to pure black here (not just var(--text-primary))
+     so it stays fully legible on projectors and in screenshots, regardless of
+     whatever --text-primary resolves to elsewhere in the app. */
+  --xai-title: #000000;
+  --xai-text: #000000;
+  --xai-subtle: #1a1a1a;
+  --xai-muted: var(--text-muted, #64748b);
+  --xai-track: #e5e7eb;
+
+  /* rgb triplets so we can build rgba(var(--x-rgb), alpha) anywhere.
+     Slightly deeper than the stat-card accents so small text stays readable. */
+  --xai-risk-rgb: 220, 38, 38;
+  --xai-safe-rgb: 5, 150, 105;
+  --xai-warn-rgb: 180, 83, 9;
+  --xai-risk: rgb(var(--xai-risk-rgb));
+  --xai-safe: rgb(var(--xai-safe-rgb));
+  --xai-warn: rgb(var(--xai-warn-rgb));
+
+  /* extra accents used by the "Top reasons" icons */
+  --xai-orange: #c2410c;
+  --xai-yellow: #a16207;
+
+  --xai-chip-text: #b91c1c;
+  --xai-ai-accent: var(--accent-blue, #2563eb);
+
+  --xai-mono: var(
+    --font-mono,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace
+  );
+}
+
+/* ---------------------------------------------------------------
+   Risk band (High Risk / Suspicious / Safe)
+   Put one of these on an element; descendants read --band-*.
+   --------------------------------------------------------------- */
+.xai-band--high {
+  --band-color: var(--xai-risk);
+  --band-rgb: var(--xai-risk-rgb);
+}
+
+.xai-band--suspicious {
+  --band-color: var(--xai-warn);
+  --band-rgb: var(--xai-warn-rgb);
+}
+
+.xai-band--safe {
+  --band-color: var(--xai-safe);
+  --band-rgb: var(--xai-safe-rgb);
+}
+
+/* ---------------------------------------------------------------
+   Cards
+   --------------------------------------------------------------- */
+.xai-card {
+  background: var(--xai-card-bg);
+  border: 1px solid var(--xai-card-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+
+.xai-card__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--xai-title);
+  margin-bottom: 10px;
+}
+
+.xai-card__title--center {
+  text-align: center;
+}
+
+/* Low-information warning */
+.xai-card--warn {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: rgba(var(--xai-warn-rgb), 0.08);
+  border: 1px solid rgba(var(--xai-warn-rgb), 0.4);
+}
+
+/* AI reasoning */
+.xai-card--reasoning {
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.1),
+    rgba(139, 92, 246, 0.07)
+  );
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* ---------------------------------------------------------------
+   Header card
+   --------------------------------------------------------------- */
+.xai-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.xai-header__main {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.xai-header__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--xai-safe-rgb), 0.12);
+  color: var(--xai-safe);
+}
+
+.xai-header__headline {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--xai-safe);
+}
+
+.xai-header__meta {
+  font-size: 13px;
+  color: var(--xai-muted);
+  margin-top: 2px;
+}
+
+/* Flagged results take the colour of their risk band */
+.xai-header--flagged .xai-header__icon {
+  background: rgba(var(--band-rgb), 0.12);
+  color: var(--band-color);
+}
+
+.xai-header--flagged .xai-header__headline {
+  color: var(--band-color);
+}
+
+.xai-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--band-color);
+  background: rgba(var(--band-rgb), 0.12);
+  border: 1px solid rgba(var(--band-rgb), 0.4);
+}
+
+/* ---------------------------------------------------------------
+   Low-information warning contents
+   --------------------------------------------------------------- */
+.xai-warn__icon {
+  color: var(--xai-warn);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.xai-warn__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--xai-warn);
+}
+
+.xai-warn__note {
+  font-size: 12.5px;
+  color: var(--xai-text);
+  margin-top: 2px;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------
+   Shared bits: legend, empty states, hints
+   --------------------------------------------------------------- */
+.xai-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--xai-muted);
+  margin-bottom: 10px;
+}
+
+.xai-legend__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+}
+
+.xai-legend__dot--risk {
+  background: var(--xai-risk);
+}
+
+.xai-legend__dot--safe {
+  background: var(--xai-safe);
+}
+
+.xai-empty {
+  font-size: 13.5px;
+  color: var(--xai-muted);
+  line-height: 1.5;
+}
+
+.xai-hint {
+  font-size: 11px;
+  color: var(--xai-muted);
+  margin-bottom: 10px;
+}
+
+.xai-note {
+  font-size: 12px;
+  color: var(--xai-muted);
+  margin-top: 8px;
+}
+
+.xai-footnote {
+  font-size: 11px;
+  color: var(--xai-muted);
+  margin-top: 6px;
+}
+
+/* ---------------------------------------------------------------
+   Progress bars. Width comes from the --bar variable set in the JSX.
+   --------------------------------------------------------------- */
+.xai-bar {
+  height: 8px;
+  background: var(--xai-track);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.xai-bar--sm {
+  height: 6px;
+}
+
+.xai-bar__fill {
+  width: var(--bar, 0%);
+  height: 100%;
+  border-radius: 4px;
+}
+
+.xai-bar__fill--risk {
+  background: var(--xai-risk);
+}
+
+.xai-bar__fill--safe {
+  background: var(--xai-safe);
+}
+
+.xai-bar__fill--reason {
+  background: var(--reason-color);
+}
+
+/* ---------------------------------------------------------------
+   Warning signs (red flags)
+   --------------------------------------------------------------- */
+.xai-flag {
+  margin-bottom: 12px;
+}
+
+.xai-flag__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--xai-title);
+  margin-bottom: 5px;
+}
+
+.xai-flag__phrases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.xai-chip {
+  font-size: 12px;
+  font-family: var(--xai-mono);
+  color: var(--xai-chip-text);
+  background: rgba(var(--xai-risk-rgb), 0.12);
+  border: 1px solid rgba(var(--xai-risk-rgb), 0.35);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+/* ---------------------------------------------------------------
+   Top reasons (icon + label + bar + percentage)
+   Accent colour comes from the category modifier; bar width from --bar.
+   --------------------------------------------------------------- */
+.xai-reason {
+  --reason-color: var(--xai-yellow);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.xai-reason--url {
+  --reason-color: var(--xai-risk);
+}
+
+.xai-reason--urgent {
+  --reason-color: var(--xai-orange);
+}
+
+.xai-reason--financial {
+  --reason-color: var(--xai-warn);
+}
+
+.xai-reason--other {
+  --reason-color: var(--xai-yellow);
+}
+
+.xai-reason--trusted {
+  --reason-color: var(--xai-safe);
+}
+
+.xai-reason__icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--reason-color) 13%, transparent);
+  color: var(--reason-color);
+}
+
+.xai-reason__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.xai-reason__label {
+  font-size: 12.5px;
+  color: var(--xai-text);
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xai-reason__pct {
+  font-size: 11.5px;
+  width: 42px;
+  text-align: right;
+  flex-shrink: 0;
+  color: var(--xai-muted);
+  font-family: var(--xai-mono);
+}
+
+/* ---------------------------------------------------------------
+   Technical details (collapsed)
+   --------------------------------------------------------------- */
+.xai-details__summary {
+  cursor: pointer;
+  margin-bottom: 0;
+}
+
+.xai-details__body {
+  margin-top: 12px;
+}
+
+.xai-factor {
+  margin-bottom: 8px;
+}
+
+.xai-factor__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--xai-subtle);
+  margin-bottom: 3px;
+}
+
+.xai-factor__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xai-factor__pct {
+  font-family: var(--xai-mono);
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
+/* ---------------------------------------------------------------
+   Highlighted text
+   --------------------------------------------------------------- */
+.xai-quote {
+  font-family: monospace;
+  font-size: 13.5px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  color: var(--xai-text);
+}
+
+/* Phrase that matches a warning sign */
+.xai-flag-mark {
+  background-color: rgba(var(--xai-risk-rgb), 0.3);
+  border: 1px solid rgba(var(--xai-risk-rgb), 0.7);
+  border-radius: 4px;
+  padding: 0 3px;
+}
+
+/* Word the model weighed. --intensity (0 to 1) is set from the JSX. */
+.xai-word {
+  --intensity: 0;
+  background-color: rgba(var(--word-rgb), calc(0.15 + var(--intensity) * 0.45));
+  border: 1px solid rgba(var(--word-rgb), calc(0.4 + var(--intensity) * 0.6));
+  border-radius: 4px;
+  padding: 0 3px;
+}
+
+.xai-word--risk {
+  --word-rgb: var(--xai-risk-rgb);
+}
+
+.xai-word--safe {
+  --word-rgb: var(--xai-safe-rgb);
+}
+
+/* ---------------------------------------------------------------
+   AI reasoning
+   --------------------------------------------------------------- */
+.xai-reasoning__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.xai-reasoning__icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--xai-ai-accent);
+  font-size: 12px;
+}
+
+.xai-reasoning__body {
+  font-size: 13.5px;
+  color: var(--xai-text);
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------
+   Small screens
+   --------------------------------------------------------------- */
+@media (max-width: 480px) {
+  .xai-card {
+    padding: 14px;
+  }
+
+  .xai-header {
+    flex-wrap: wrap;
+  }
+}

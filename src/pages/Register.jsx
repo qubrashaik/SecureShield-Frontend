@@ -1,6 +1,19 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api.js";
+import AuthLayout from "../components/AuthLayout.jsx";
+
+// Text for the left-hand brand panel
+const BRAND = {
+  headline: "Stay Protected From Digital Threats",
+  tagline:
+    "Create your SecureShield account and use AI-powered detection to identify suspicious emails, SMS messages, and URLs.",
+  features: [
+    "Detect phishing attempts",
+    "Identify spam messages",
+    "Understand AI predictions",
+  ],
+};
 
 export default function Register() {
   const [username, setUsername] = useState("");
@@ -8,16 +21,21 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
     setLoading(true);
+
     try {
       const res = await api.register(username, email, password);
+
       api.setToken(res.token);
-      navigate("/");
+
+      // After successful registration, go to Dashboard
+      navigate("/dashboard");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -26,35 +44,67 @@ export default function Register() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <h1>Create your account</h1>
-        <p className="sub">Get started with SecureShield</p>
-
-        {error && <div className="auth-error">{error}</div>}
-
-        <form onSubmit={handleSubmit}>
-          <div className="auth-field">
-            <label>Username</label>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} />
-          </div>
-          <div className="auth-field">
-            <label>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
-          <div className="auth-field">
-            <label>Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
-          </div>
-          <button className="btn-primary" style={{ width: "100%" }} disabled={loading}>
-            {loading ? "Creating account..." : "Create account"}
-          </button>
-        </form>
-
-        <div className="auth-switch">
+    <AuthLayout
+      brand={BRAND}
+      title="Create your account"
+      subtitle="Get started with SecureShield and stay protected."
+      error={error}
+      footer={
+        <>
           Already have an account? <Link to="/login">Sign in</Link>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <label className="auth-form__field">
+          <span className="auth-form__label">Username</span>
+          <input
+            className="auth-form__input"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Choose a username"
+            autoComplete="username"
+            required
+            minLength={3}
+          />
+        </label>
+
+        <label className="auth-form__field">
+          <span className="auth-form__label">Email</span>
+          <input
+            className="auth-form__input"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter your email"
+            autoComplete="email"
+            required
+          />
+        </label>
+
+        <label className="auth-form__field">
+          <span className="auth-form__label">Password</span>
+          <input
+            className="auth-form__input"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Create a password"
+            autoComplete="new-password"
+            required
+            minLength={6}
+          />
+        </label>
+
+        <button
+          type="submit"
+          className="btn-primary auth-form__submit"
+          disabled={loading}
+        >
+          {loading ? "Creating account..." : "Create account"}
+        </button>
+      </form>
+    </AuthLayout>
   );
 }

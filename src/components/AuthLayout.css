@@ -1,0 +1,206 @@
+/* =====================================================================
+   AuthLayout.css
+   Page shell, card and form fields for Login and Register.
+   Values match your old .auth-* rules (card, inputs, error, switch link),
+   now under new names: `auth-layout*` (shell) and `auth-form*` (form pieces).
+   Colours come from the tokens in index.css.
+   ===================================================================== */
+
+.auth-layout {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+/* ---------------------------------------------------------------
+   Right side: card
+   --------------------------------------------------------------- */
+.auth-layout__main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 40px;
+  background: var(--bg);
+}
+
+.auth-layout__card {
+  width: 100%;
+  max-width: 430px;
+  padding: 38px;
+  border-radius: 24px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow:
+    0 20px 50px rgba(15, 23, 42, 0.08),
+    0 2px 8px rgba(15, 23, 42, 0.03);
+}
+
+.auth-layout__heading {
+  margin-bottom: 28px;
+}
+
+.auth-layout__title {
+  margin: 0 0 8px;
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text-primary);
+}
+
+.auth-layout__subtitle {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* Compact logo, shown only on phones where the brand panel is hidden */
+.auth-layout__mobile-brand {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.auth-layout__mobile-logo {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  color: white;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2);
+}
+
+.auth-layout__switch {
+  margin: 22px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.auth-layout__switch a {
+  font-weight: 600;
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+.auth-layout__switch a:hover {
+  text-decoration: underline;
+}
+
+.auth-layout__switch a:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ---------------------------------------------------------------
+   Form pieces (inside the <form> each page passes in)
+   --------------------------------------------------------------- */
+.auth-form__field {
+  display: block;
+  margin-bottom: 18px;
+}
+
+.auth-form__label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.auth-form__input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  outline: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
+}
+
+.auth-form__input::placeholder {
+  color: #a1aab8;
+}
+
+.auth-form__input:focus {
+  background: white;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Keeps the shared .btn-primary look (index.css), adds full width */
+.auth-form__submit {
+  width: 100%;
+  margin-top: 5px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 13.5px;
+}
+
+.auth-form__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.auth-form__error {
+  margin-bottom: 18px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: var(--accent-red);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------
+   Responsive (same breakpoints as before)
+   --------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .auth-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-layout__main {
+    min-height: auto;
+    padding: 40px 25px;
+  }
+}
+
+@media (max-width: 650px) {
+  .auth-layout__main {
+    padding: 25px 18px;
+  }
+
+  .auth-layout__card {
+    padding: 28px 22px;
+    border-radius: 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  .auth-layout__main {
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .auth-layout__mobile-brand {
+    display: flex;
+  }
+}

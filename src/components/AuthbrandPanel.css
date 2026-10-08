@@ -1,0 +1,284 @@
+/* =====================================================================
+   AuthBrandPanel.css
+   Left side of login / register. Uses the same navy-to-blue gradient as
+   your old panel, plus a fine grid and a sample scan card.
+   Every class starts with `brand-panel` so nothing clashes.
+   ===================================================================== */
+
+.brand-panel {
+  --bp-soft: rgba(255, 255, 255, 0.74);
+  --bp-line: rgba(255, 255, 255, 0.18);
+  --bp-risk-rgb: 248, 113, 113;
+
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  overflow: hidden;
+  min-height: 100vh;
+  padding: clamp(32px, 5vw, 64px);
+  color: white;
+  background:
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(96, 165, 250, 0.25),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 80% 80%,
+      rgba(37, 99, 235, 0.22),
+      transparent 35%
+    ),
+    linear-gradient(145deg, #172554, #1e3a8a 55%, #2563eb);
+}
+
+/* Fine grid that fades out towards the edges */
+.brand-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(
+    ellipse at 30% 40%,
+    #000 20%,
+    transparent 75%
+  );
+  mask-image: radial-gradient(ellipse at 30% 40%, #000 20%, transparent 75%);
+}
+
+/* Decorative ring, top right */
+.brand-panel::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -180px;
+  right: -150px;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.brand-panel__inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 36px;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+/* ---------------------------------------------------------------
+   Brand row
+   --------------------------------------------------------------- */
+.brand-panel__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-panel__logo {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  color: white;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.brand-panel__name {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* ---------------------------------------------------------------
+   Headline + tagline
+   --------------------------------------------------------------- */
+.brand-panel__headline {
+  margin: 0;
+  font-size: clamp(28px, 3.2vw, 40px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.brand-panel__tagline {
+  margin: 14px 0 0;
+  max-width: 46ch;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--bp-soft);
+}
+
+/* ---------------------------------------------------------------
+   Sample scan card (the one memorable element)
+   --------------------------------------------------------------- */
+.brand-panel__scan {
+  margin: 0;
+  padding: 16px 18px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--bp-line);
+  box-shadow: 0 24px 50px rgba(8, 18, 60, 0.35);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.brand-panel__scan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: var(--bp-soft);
+}
+
+.brand-panel__verdict {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.24);
+  border: 1px solid rgba(252, 165, 165, 0.5);
+  white-space: nowrap;
+}
+
+.brand-panel__scan-text {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.85;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.brand-panel__flag {
+  padding: 0 3px;
+  border-radius: 4px;
+  color: inherit;
+  background: rgba(var(--bp-risk-rgb), 0.35);
+  border: 1px solid rgba(254, 202, 202, 0.7);
+}
+
+.brand-panel__scan-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.brand-panel__meter {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.brand-panel__meter-fill {
+  display: block;
+  width: 96%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #fbbf24, #ef4444);
+}
+
+.brand-panel__scan-note {
+  font-size: 12px;
+  color: var(--bp-soft);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------
+   Feature list
+   --------------------------------------------------------------- */
+.brand-panel__features {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.brand-panel__feature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.brand-panel__check {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #bfdbfe;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ---------------------------------------------------------------
+   Responsive (same breakpoints as before)
+   --------------------------------------------------------------- */
+
+/* Short laptop screens: drop the sample card so everything else fits */
+@media (max-height: 760px) {
+  .brand-panel__scan {
+    display: none;
+  }
+}
+
+/* Tablet: panel stacks above the form in a compact form */
+@media (max-width: 900px) {
+  .brand-panel {
+    min-height: auto;
+    padding: 45px 30px;
+  }
+
+  .brand-panel__inner {
+    max-width: 600px;
+    gap: 24px;
+  }
+
+  .brand-panel__scan {
+    display: none;
+  }
+
+  .brand-panel__features {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 650px) {
+  .brand-panel {
+    padding: 35px 24px;
+  }
+
+  .brand-panel__features {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .brand-panel__tagline {
+    font-size: 13px;
+  }
+}
+
+/* Phone: hidden, AuthLayout shows a compact logo above the form */
+@media (max-width: 560px) {
+  .brand-panel {
+    display: none;
+  }
+}

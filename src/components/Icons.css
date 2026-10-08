@@ -1,0 +1,30 @@
+/* =====================================================================
+   Icons.css
+   Shared look for every icon in Icons.jsx (outline style, inherits the
+   surrounding text colour through currentColor).
+
+   Size is NOT set here on purpose: Icons.jsx gives each icon a default
+   width/height of 15 and callers override it with width={18} height={18}.
+   A CSS width/height rule would override those props.
+   To size icons from CSS instead, add your own class on the icon
+   (for example <LinkIcon className="icon--lg" />) and define it below.
+   ===================================================================== */
+
+.icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Optional size helpers (unused by default) */
+.icon--sm {
+  width: 12px;
+  height: 12px;
+}
+
+.icon--lg {
+  width: 20px;
+  height: 20px;
+}

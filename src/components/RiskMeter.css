@@ -1,0 +1,123 @@
+/* =====================================================================
+   RiskMeter.css
+   Colours come from the tokens in index.css (--accent-green, --accent-amber,
+   --accent-red, --text-primary, --text-muted), with the same values as
+   fallbacks so the meter also works on its own.
+   ===================================================================== */
+
+.risk-meter {
+  /* Vivid colours for the gauge and legend dots */
+  --rm-safe: var(--accent-green, #10b981);
+  --rm-warn: var(--accent-amber, #f59e0b);
+  --rm-risk: var(--accent-red, #ef4444);
+
+  /* Darker shades for the text label so it stays readable on white */
+  --rm-safe-text: #059669;
+  --rm-warn-text: #b45309;
+  --rm-risk-text: #dc2626;
+
+  --rm-track: #e5e7eb;
+  --rm-marker-fill: #ffffff;
+  --rm-value: var(--text-primary, #1e293b);
+  --rm-muted: var(--text-muted, #64748b);
+
+  /* Set by the score band below */
+  --rm-tone: var(--rm-warn);
+  --rm-tone-text: var(--rm-warn-text);
+
+  text-align: center;
+}
+
+.risk-meter--safe {
+  --rm-tone: var(--rm-safe);
+  --rm-tone-text: var(--rm-safe-text);
+}
+
+.risk-meter--suspicious {
+  --rm-tone: var(--rm-warn);
+  --rm-tone-text: var(--rm-warn-text);
+}
+
+.risk-meter--high {
+  --rm-tone: var(--rm-risk);
+  --rm-tone-text: var(--rm-risk-text);
+}
+
+/* ---------------------------------------------------------------
+   Gauge
+   --------------------------------------------------------------- */
+.risk-meter__svg {
+  display: block;
+  width: 100%;
+  max-width: 230px;
+  margin: 0 auto;
+}
+
+.risk-meter__stop--safe {
+  stop-color: var(--rm-safe);
+}
+
+.risk-meter__stop--suspicious {
+  stop-color: var(--rm-warn);
+}
+
+.risk-meter__stop--high {
+  stop-color: var(--rm-risk);
+}
+
+.risk-meter__track {
+  stroke: var(--rm-track);
+}
+
+.risk-meter__marker {
+  fill: var(--rm-marker-fill);
+  stroke: var(--rm-tone);
+}
+
+.risk-meter__value {
+  font-size: 26px;
+  font-weight: 700;
+  fill: var(--rm-value);
+}
+
+.risk-meter__label {
+  font-size: 12.5px;
+  font-weight: 600;
+  fill: var(--rm-tone-text);
+}
+
+/* ---------------------------------------------------------------
+   Legend
+   --------------------------------------------------------------- */
+.risk-meter__legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 16px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.risk-meter__legend-item {
+  color: var(--rm-muted);
+}
+
+.risk-meter__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.risk-meter__dot--safe {
+  background: var(--rm-safe);
+}
+
+.risk-meter__dot--suspicious {
+  background: var(--rm-warn);
+}
+
+.risk-meter__dot--high {
+  background: var(--rm-risk);
+}

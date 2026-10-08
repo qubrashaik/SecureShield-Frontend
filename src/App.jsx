@@ -5,22 +5,35 @@ import Dashboard from "./pages/Dashboard.jsx";
 import { api } from "./api.js";
 
 function RequireAuth({ children }) {
-  return api.isAuthed() ? children : <Navigate to="/login" replace />;
+  if (!api.isAuthed()) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
 }
 
 export default function App() {
   return (
     <Routes>
+      {/* Initial page */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
+
+      {/* Authentication */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+
+      {/* Protected Dashboard */}
       <Route
-        path="/"
+        path="/dashboard"
         element={
           <RequireAuth>
             <Dashboard />
           </RequireAuth>
         }
       />
+
+      {/* Unknown URL */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }

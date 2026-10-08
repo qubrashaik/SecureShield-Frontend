@@ -5,38 +5,71 @@ import {
   AlertTriangleIcon,
   ShieldCheckIcon,
 } from "./Icons.jsx";
+import "./ExplainableAIPanel.css";
 
 /**
  * ExplainableAIPanel
  *
- * A structured XAI display matching the "Explainable AI Analysis" layout:
- *   - Header: label + confidence + risk level
- *   - Top Reasons: flagged words grouped into plain-language categories
- *   - Feature Impact: bar chart of the raw top words/weights
- *   - Highlighted Text: the original message with flagged words colored inline
- *   - AI Reasoning: one-sentence synthesis of the strongest categories
- *
  * Props:
  *   text     - the original message text that was scanned
- *   features - result.topFeatures from the API, i.e. [{ name, value }, ...]
- *              positive value = pushes toward Spam/Phishing
- *              negative value = pushes toward Legitimate
- *   label    - result.label ("Spam/Phishing" | "Legitimate" | "Phishing")
- *   confidence - result.confidence (0-1)
+ *   features - explanation items from the API (result.topFeatures). Each item:
+ *                { name, value }                                  (old shape, still works)
+ *              plus, from the new Flask response (any of these may be missing):
+ *                { label, kind, token, direction, impact_pct | impactPct }
+ *              value > 0 / direction "phishing"    = pushes toward Spam/Phishing
+ *              value < 0 / direction "legitimate"  = pushes toward Legitimate
+ *   label    - result.label ("Spam/Phishing" | "Spam" | "Phishing" | "Legitimate")
+ *   confidence - result.confidence (0-1), confidence in `label`
+ *
+ * Optional props (forward these from the backend when you can; the panel
+ * derives sensible fallbacks when they are missing):
+ *   method               - "SHAP" | "LIME"  (xai_data.method)
+ *   phishingProbability  - 0-1, probability of the malicious class
+ *   riskLevel            - "Safe" | "Suspicious" | "High Risk"
+ *   reliability          - { level: "low" | "normal", note }
+ *   redFlags             - plain-English warning signs from the backend:
+ *                            [{ key, title, phrases: ["exact text from message", ...] }]
+ *                          (Flask sends this as `red_flags`; Spring Boot may
+ *                          expose it as `redFlags`.)
+ *   senderAnalysis       - sender risk check, EMAIL + SMS only (Flask's
+ *                          `sender_analysis`, exposed by Spring Boot as
+ *                          `senderAnalysis`). Shape:
+ *                            { provided, risk, level: "low"|"medium"|"high",
+ *                              trusted, flags: [{key,title,phrases}], ... }
+ *                          Omitted or { provided: false } when no sender was
+ *                          entered - the card is simply not shown.
+ *
+ * Styling lives in ExplainableAIPanel.css (all classes are prefixed `xai-`).
+ * The only inline styles left are CSS variables for values computed at
+ * runtime (bar widths, highlight intensity, icon colour).
  */
 
-// Category buckets built from what a content-only LIME explanation can
-// actually support - no sender/metadata categories, since the model only
-// ever sees the message text. Negative-weight words that don't match a
-// specific "risky" pattern are bucketed as trust signals.
-const CATEGORY_LABELS = {
-  url: "Suspicious link",
-  urgent: "Urgent / threatening language",
-  financial: "Financial or reward bait",
-  other: "Suspicious phrasing",
-  trusted: "Trusted indicators",
+// ---------------------------------------------------------------
+// Tunable constants
+// ---------------------------------------------------------------
+// LIME (SMS) / legacy path: raw weights, calibrated as before.
+//   REFERENCE_SCALE      = raw weight that fills a bar (strong signal ~0.2)
+//   NEGLIGIBLE_THRESHOLD = below this it is sampling noise (noise ~0.03-0.04)
+const REFERENCE_SCALE = 0.2;
+const NEGLIGIBLE_THRESHOLD = 0.05;
+
+// SHAP (email / URL) path: the backend sends impact_pct = share of the model's
+// total attribution, so it is independent of SHAP's units.
+//   REFERENCE_SHARE  = a feature carrying this % of the decision fills its bar
+//   NEGLIGIBLE_SHARE = below this % it is shown as "minor"
+const REFERENCE_SHARE = 30;
+const NEGLIGIBLE_SHARE = 4;
+
+// Risk band -> CSS modifier (colours are defined in the CSS file).
+const BAND_CLASS = {
+  "High Risk": "high",
+  Suspicious: "suspicious",
+  Safe: "safe",
 };
 
+// ---------------------------------------------------------------
+// Categorisation (only used to pick an icon for each reason)
+// ---------------------------------------------------------------
 const MATCHERS = {
   url: (w) =>
     /^(http|https|www|com|net|org|io|link|click|bit|ly)$/i.test(w) ||
@@ -51,218 +84,291 @@ const MATCHERS = {
     ),
 };
 
-function categorize(word, value) {
-  const w = word.toLowerCase();
+// Engineered (non-word) features from the email and URL models.
+const SIGNAL_CATEGORY = {
+  has_url: "url",
+  is_shortened: "url",
+  has_ip: "url",
+  num_at: "url",
+  num_subdomains: "url",
+  num_dots: "url",
+  num_hyphens: "url",
+  num_subdirs: "url",
+  num_params: "url",
+  url_length: "url",
+  num_digits: "url",
+  unique_char_ratio: "url",
+  urgency_flag: "urgent",
+  suspicious_word_count: "urgent",
+};
+
+function categoryOf(item) {
+  if (item.direction === "legitimate") return "trusted";
+  if (item.kind === "signal") return SIGNAL_CATEGORY[item.name] || "other";
+  const w = String(item.token || item.name).toLowerCase();
   if (MATCHERS.url(w)) return "url";
   if (MATCHERS.urgent(w)) return "urgent";
   if (MATCHERS.financial(w)) return "financial";
-  if (value < 0) return "trusted";
   return "other";
 }
 
-function riskLevel(label, confidence) {
-  const flagged = label && label.toLowerCase() !== "legitimate";
-  if (!flagged) return null;
-  if (confidence >= 0.9) return "High";
-  if (confidence >= 0.7) return "Medium";
-  return "Low";
+// Accepts both the old {name, value} shape and the new labelled shape,
+// snake_case (Flask) or camelCase (Spring Boot).
+function normalizeFeature(f) {
+  const value = Number(f.value) || 0;
+  const name = String(f.name);
+  const kind = f.kind || "token";
+  return {
+    name,
+    label: f.label || name,
+    kind,
+    token: f.token !== undefined ? f.token : kind === "token" ? name : null,
+    direction: f.direction || (value > 0 ? "phishing" : "legitimate"),
+    value,
+    impactPct: f.impact_pct ?? f.impactPct,
+  };
 }
 
-// Reference scale for "how big does a word's influence look" - based on what
-// a genuinely strong signal measures in practice (e.g. "http" in a clear
-// phishing message came out around 0.20-0.22). Used instead of normalizing
-// each word against the total of just the few words shown, which always
-// sums to 100% and makes even negligible weights look like ~17% each when
-// 6 words are displayed - exactly what was happening on high-confidence
-// Legitimate messages where no single word actually matters.
-const REFERENCE_SCALE = 0.2;
-// Raised from 0.02: on very high-confidence predictions (e.g. 99%+), LIME's
-// local regression has almost no real signal to fit (removing any one word
-// barely changes the prediction), so it can produce small, coincidentally
-// similar, same-signed weights across totally unrelated words - noise, not
-// a real indicator. Observed noise clusters around 0.03-0.04; observed real
-// signal (e.g. "http" in a clear phishing message) started around 0.06 and
-// went up to ~0.22. 0.05 sits cleanly between the two.
-const NEGLIGIBLE_THRESHOLD = 0.05;
+// Class + CSS variable for a highlighted word in the "Highlighted Text" card.
+// Colour comes from the modifier class; --intensity (0-1) drives the opacity.
+function wordProps(item) {
+  const tone = item.direction === "phishing" ? "risk" : "safe";
+  return {
+    className: `xai-word xai-word--${tone}`,
+    style: { "--intensity": Math.min(item.barPct / 100, 1) },
+  };
+}
 
-const cardStyle = {
-  background: "var(--panel-bg, #0f1424)",
-  border: "1px solid var(--panel-border, #1f2740)",
-  borderRadius: 10,
-  padding: "16px 18px",
-  marginBottom: 14,
-};
+function Legend() {
+  return (
+    <div className="xai-legend">
+      <span>
+        <span className="xai-legend__dot xai-legend__dot--risk" />
+        pushes toward spam / phishing
+      </span>
+      <span>
+        <span className="xai-legend__dot xai-legend__dot--safe" />
+        pushes toward legitimate
+      </span>
+    </div>
+  );
+}
 
-const cardTitleStyle = {
-  fontSize: 13,
-  fontWeight: 600,
-  color: "#e2e8f0",
-  marginBottom: 10,
-};
+// Escapes a phrase for use inside a RegExp, and lets any run of spaces match
+// any whitespace (the panel text may contain line breaks the backend did not).
+function phraseToPattern(p) {
+  return p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+}
 
 export default function ExplainableAIPanel({
   text,
   features = [],
   label,
   confidence = 0,
+  method,
+  phishingProbability,
+  riskLevel,
+  reliability,
+  redFlags = [],
+  senderAnalysis = null,
+  scanType,
 }) {
-  const flagged = label && label.toLowerCase() !== "legitimate";
+  const flagged = !!label && label.toLowerCase() !== "legitimate";
+  const lowInfo = reliability?.level === "low";
+  const flags = Array.isArray(redFlags) ? redFlags : [];
 
-  const sortedFeatures = useMemo(
-    () => [...features].sort((a, b) => Math.abs(b.value) - Math.abs(a.value)),
-    [features],
-  );
+  // Only render the sender card when a sender was actually entered.
+  const senderProvided = !!senderAnalysis?.provided;
+  const senderFlags =
+    senderProvided && Array.isArray(senderAnalysis.flags)
+      ? senderAnalysis.flags
+      : [];
+  const senderBandKey =
+    senderAnalysis?.level === "high"
+      ? "high"
+      : senderAnalysis?.level === "medium"
+        ? "suspicious"
+        : "safe";
+  const senderBandLabel =
+    senderAnalysis?.level === "high"
+      ? "High risk"
+      : senderAnalysis?.level === "medium"
+        ? "Worth checking"
+        : senderAnalysis?.trusted
+          ? "Recognised"
+          : "Looks normal";
 
-  const maxAbsWeight = useMemo(
-    () => Math.max(...features.map((f) => Math.abs(f.value)), 0.0001),
-    [features],
-  );
+  // Normalise every item and give it a scale-independent impact (0-100).
+  const items = useMemo(() => {
+    const norm = features.map(normalizeFeature);
+    // SHAP items carry impact_pct as a share of the whole decision. LIME (and
+    // the old API) only have raw weights, so they keep the calibrated
+    // raw-weight scale. If `method` isn't forwarded, engineered "signal"
+    // items identify the SHAP channels.
+    // Old scans loaded from history have no impact_pct, so they always fall
+    // back to the raw-weight scale.
+    const hasShares = norm.some((i) => i.impactPct != null);
+    const isShare =
+      hasShares &&
+      (method
+        ? String(method).toUpperCase() === "SHAP"
+        : norm.some((i) => i.kind === "signal"));
 
-  const totalAbsWeight = useMemo(
-    () => features.reduce((sum, f) => sum + Math.abs(f.value), 0) || 0.0001,
-    [features],
-  );
+    return norm
+      .map((i) => {
+        const impact = isShare
+          ? (i.impactPct ?? 0)
+          : Math.min(100, (Math.abs(i.value) / REFERENCE_SCALE) * 100);
+        const minor = isShare
+          ? impact < NEGLIGIBLE_SHARE
+          : Math.abs(i.value) < NEGLIGIBLE_THRESHOLD;
+        const barPct = isShare
+          ? Math.min(100, (impact / REFERENCE_SHARE) * 100)
+          : impact;
+        return { ...i, impact, minor, barPct, category: categoryOf(i) };
+      })
+      .sort((a, b) => b.impact - a.impact);
+  }, [features, method]);
 
-  // Group all words into plain-language reason categories, keeping sign so
-  // that trust signals (negative) show up alongside risk signals (positive).
-  //
-  // FIX: previously this showed EVERY category regardless of the overall
-  // verdict. With num_samples=200, LIME's local surrogate can assign small
-  // positive weights to totally ordinary words (sampling noise) even on a
-  // clearly Legitimate message. If none of those words matched a real risk
-  // pattern (url/urgent/financial), they all fell into the generic "other"
-  // bucket ("Suspicious phrasing"), which could sum to +100% and get shown
-  // as the reason - even though the model's actual verdict was Legitimate
-  // at high confidence. That's misleading, so the direction shown must now
-  // match the verdict: flagged messages only show risk (positive) reasons,
-  // Legitimate messages only show trust (negative) reasons. Positive-only
-  // noise on a Legitimate result is discarded rather than displayed.
+  // Reasons must agree with the verdict: flagged -> what pushed toward risk,
+  // Legitimate -> what pushed toward safe. Noise-level items are dropped.
   const topReasons = useMemo(() => {
-    // Only aggregate features whose individual weight clears the noise
-    // floor, so a category sum can't be built entirely out of LIME
-    // sampling noise (see NEGLIGIBLE_THRESHOLD above).
-    const significant = sortedFeatures.filter(
-      (f) => Math.abs(f.value) >= NEGLIGIBLE_THRESHOLD,
-    );
-    const totals = new Map(); // key -> summed value
-    significant.forEach((f) => {
-      const key = categorize(f.name, f.value);
-      totals.set(key, (totals.get(key) || 0) + f.value);
-    });
-    return [...totals.entries()]
-      .map(([key, value]) => ({
-        key,
-        label: CATEGORY_LABELS[key],
-        pct: (value / totalAbsWeight) * 100,
-      }))
-      .filter((r) => Math.abs(r.pct) >= 1)
-      .filter((r) => (flagged ? r.pct > 0 : r.pct < 0))
-      .sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))
-      .slice(0, 5);
-  }, [sortedFeatures, totalAbsWeight, flagged]);
+    const want = flagged ? "phishing" : "legitimate";
+    return items.filter((i) => i.direction === want && !i.minor).slice(0, 4);
+  }, [items, flagged]);
 
-  const reasoning = useMemo(() => {
-    if (!flagged) {
-      if (topReasons.length === 0) {
-        return "No strong phishing or spam indicators were found in this message.";
-      }
-      const top2 = topReasons.slice(0, 2).map((r) => r.label.toLowerCase());
-      return `Marked Legitimate — no risk indicators found. Trust signals: ${top2.join(", ")}.`;
-    }
-    if (topReasons.length === 0) {
-      return "The model flagged this message, but no single indicator stood out strongly.";
-    }
-    const top2 = topReasons.slice(0, 2).map((r) => r.label.toLowerCase());
-    return `The strongest indicators were ${top2.join(" and ")}.`;
-  }, [flagged, topReasons]);
+  // Technical details list: only factors that actually carried weight.
+  // "Minor" rows and "absence" rows are noise to a normal user.
+  const visibleItems = useMemo(
+    () => items.filter((i) => !i.minor).slice(0, 6),
+    [items],
+  );
 
-  const weightByWord = useMemo(() => {
+  // word (lowercase) -> item, strongest item wins. Multi-word n-grams such as
+  // "click here" highlight each of their words.
+  const highlightMap = useMemo(() => {
     const map = new Map();
-    features.forEach((f) => map.set(String(f.name).toLowerCase(), f.value));
+    items.forEach((i) => {
+      if (!i.token || i.minor) return;
+      String(i.token)
+        .toLowerCase()
+        .split(/\s+/)
+        .forEach((w) => {
+          if (w && !map.has(w)) map.set(w, i);
+        });
+    });
     return map;
-  }, [features]);
+  }, [items]);
 
   const tokens = useMemo(() => {
     if (!text) return [];
     return text.split(/(\s+|[.,!?;:()"'])/g).filter((t) => t !== "");
   }, [text]);
 
-  const wordStyle = (weight) => {
-    const intensity = Math.min(Math.abs(weight) / maxAbsWeight, 1);
-    const isSpamPush = weight > 0;
-    const bg = isSpamPush
-      ? `rgba(244, 63, 94, ${0.15 + intensity * 0.45})`
-      : `rgba(52, 211, 153, ${0.15 + intensity * 0.45})`;
-    const border = isSpamPush
-      ? `rgba(244, 63, 94, ${0.4 + intensity * 0.6})`
-      : `rgba(52, 211, 153, ${0.4 + intensity * 0.6})`;
-    return {
-      backgroundColor: bg,
-      border: `1px solid ${border}`,
-      borderRadius: 4,
-      padding: "0 3px",
-    };
-  };
+  // Splits the text around the red-flag phrases so they can be highlighted.
+  // Returns null when there is nothing to highlight (falls back to word-level
+  // highlighting from the model).
+  const segments = useMemo(() => {
+    if (!text) return null;
+    const phrases = flags.flatMap((f) => f.phrases || []).filter(Boolean);
+    if (phrases.length === 0) return null;
+    const pattern = [...phrases]
+      .sort((a, b) => b.length - a.length)
+      .map(phraseToPattern)
+      .join("|");
+    try {
+      return text
+        .split(new RegExp(`(${pattern})`, "gi"))
+        .map((part, i) => ({ part, hit: i % 2 === 1 }))
+        .filter((s) => s.part !== "");
+    } catch {
+      return null;
+    }
+  }, [text, flags]);
 
-  const risk = riskLevel(label, confidence);
+  // Risk = probability of the malicious class (backend value if provided).
+  const pMalicious =
+    phishingProbability != null
+      ? Number(phishingProbability)
+      : flagged
+        ? confidence
+        : 1 - confidence;
+  const riskValue = Math.max(0, Math.min(100, pMalicious * 100));
+  const band =
+    riskLevel ||
+    (riskValue > 70 ? "High Risk" : riskValue > 30 ? "Suspicious" : "Safe");
+  const bandKey = BAND_CLASS[band] || BAND_CLASS.Suspicious;
 
-  // Risk-meter reading: for flagged content, higher confidence = higher risk.
-  // For legitimate content, higher confidence = lower risk.
-  const riskValue = flagged
-    ? confidence * 100
-    : Math.max(0, (1 - confidence) * 100);
-  const riskBadge =
-    riskValue > 70
-      ? {
-          text: "High Risk",
-          color: "#f43f5e",
-          bg: "rgba(244, 63, 94, 0.12)",
-          border: "rgba(244, 63, 94, 0.4)",
-        }
-      : riskValue > 30
-        ? {
-            text: "Suspicious",
-            color: "#e2a13a",
-            bg: "rgba(226, 161, 58, 0.12)",
-            border: "rgba(226, 161, 58, 0.4)",
-          }
-        : {
-            text: "Safe",
-            color: "#34d399",
-            bg: "rgba(52, 211, 153, 0.12)",
-            border: "rgba(52, 211, 153, 0.4)",
-          };
+  // Wording follows the band, so "Detected" is only used for High Risk.
+  const headline =
+    band === "High Risk"
+      ? `${label} Detected`
+      : band === "Suspicious"
+        ? flagged
+          ? `Possible ${label}`
+          : "Likely Legitimate"
+        : label;
+  const confidencePct = (confidence * 100).toFixed(0);
 
-  if (!text || features.length === 0) return null;
+  const reasoning = useMemo(() => {
+    if (lowInfo) {
+      return "There was too little content for the model to work with, so treat this score as a weak guess. Try a fuller message.";
+    }
+
+    // Plain-English summary built from the warning signs that were found.
+    if (flags.length > 0) {
+      const parts = flags
+        .slice(0, 3)
+        .map((f) => f.title.charAt(0).toLowerCase() + f.title.slice(1));
+      const list =
+        parts.length > 1
+          ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
+          : parts[0];
+      const isUrl = scanType === "URL";
+      const what = isUrl
+        ? "link"
+        : scanType === "SMS"
+          ? "text message"
+          : "message";
+      return flagged
+        ? `This ${what} ${list}. These are common tactics in phishing and scam ${isUrl ? "links" : "messages"}.`
+        : `Marked Legitimate, but this ${what} ${list}. Double-check ${isUrl ? "the link" : "the sender"} before you act on it.`;
+    }
+
+    const factors = topReasons
+      .slice(0, 2)
+      .map((r) => r.label)
+      .join("; ");
+    if (flagged) {
+      return factors
+        ? `The model leans ${label} mainly because of: ${factors}.`
+        : "The model flagged this message from its overall pattern, but no single word or feature stood out strongly.";
+    }
+    return factors
+      ? `Marked Legitimate. Factors in its favour: ${factors}.`
+      : "No strong phishing or spam indicators were found in this message.";
+  }, [lowInfo, flagged, label, topReasons, flags, scanType]);
+
+  const signedPct = (item) =>
+    `${item.direction === "phishing" ? "+" : "\u2212"}${item.impact.toFixed(0)}%`;
+
+  if (!text) return null;
+
+  const hasHighlights = tokens.some((t) =>
+    highlightMap.has(t.trim().toLowerCase()),
+  );
 
   return (
-    <div>
+    <div className="xai-panel">
       {/* Header */}
-      <div style={cardStyle}>
+      <div className="xai-card">
         <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
+          className={`xai-header xai-band--${bandKey} ${
+            flagged ? "xai-header--flagged" : "xai-header--clear"
+          }`}
         >
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <div
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 8,
-                flexShrink: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: flagged
-                  ? "rgba(244, 63, 94, 0.12)"
-                  : "rgba(52, 211, 153, 0.12)",
-                color: flagged ? "#f43f5e" : "#34d399",
-              }}
-            >
+          <div className="xai-header__main">
+            <div className="xai-header__icon">
               {flagged ? (
                 <AlertTriangleIcon width={18} height={18} />
               ) : (
@@ -270,272 +376,260 @@ export default function ExplainableAIPanel({
               )}
             </div>
             <div>
-              <div
-                style={{
-                  fontSize: 16,
-                  fontWeight: 700,
-                  color: flagged ? "#f43f5e" : "#34d399",
-                }}
-              >
-                {flagged ? `${label} Detected` : label}
-              </div>
-              <div style={{ fontSize: 13, color: "#8b94ab", marginTop: 2 }}>
-                Confidence: {(confidence * 100).toFixed(0)}%
+              <div className="xai-header__headline">{headline}</div>
+              <div className="xai-header__meta">
+                {band === "Suspicious"
+                  ? `Leans ${label} \u00b7 Confidence ${confidencePct}%`
+                  : `Confidence: ${confidencePct}%`}
               </div>
             </div>
           </div>
-          {risk && (
-            <span
-              style={{
-                fontSize: 11.5,
-                fontWeight: 600,
-                padding: "4px 10px",
-                borderRadius: 999,
-                color: riskBadge.color,
-                background: riskBadge.bg,
-                border: `1px solid ${riskBadge.border}`,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {riskBadge.text}
-            </span>
-          )}
+          <span className="xai-badge">{band}</span>
         </div>
       </div>
 
+      {/* Low-information warning */}
+      {lowInfo && (
+        <div className="xai-card xai-card--warn">
+          <span className="xai-warn__icon">
+            <AlertTriangleIcon width={16} height={16} />
+          </span>
+          <div>
+            <div className="xai-warn__title">Limited analysis</div>
+            <div className="xai-warn__note">
+              {reliability?.note ||
+                "Too little content to analyse reliably. Treat this result as a weak guess."}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Risk Meter */}
-      <div style={cardStyle}>
-        <div style={{ ...cardTitleStyle, textAlign: "center" }}>Risk Meter</div>
+      <div className="xai-card">
+        <div className="xai-card__title xai-card__title--center">
+          Risk Meter
+        </div>
         <RiskMeter value={riskValue} />
       </div>
 
-      {/* Top Reasons */}
-      <div style={cardStyle}>
-        <div style={cardTitleStyle}>Top Reasons</div>
-        {topReasons.length > 0 ? (
+      {/* Sender check (EMAIL + SMS only, only when a sender was entered) */}
+      {senderProvided && (
+        <div className="xai-card">
+          <div
+            className={`xai-header xai-band--${senderBandKey} ${
+              senderBandKey === "safe"
+                ? "xai-header--clear"
+                : "xai-header--flagged"
+            }`}
+            style={{ marginBottom: senderFlags.length ? "0.5rem" : 0 }}
+          >
+            <div className="xai-header__main">
+              <div className="xai-header__icon">
+                {senderAnalysis.level === "high" ||
+                senderAnalysis.level === "medium" ? (
+                  <AlertTriangleIcon width={16} height={16} />
+                ) : (
+                  <ShieldCheckIcon width={16} height={16} />
+                )}
+              </div>
+              <div>
+                <div className="xai-header__headline">Sender check</div>
+                <div className="xai-header__meta">
+                  {senderAnalysis.raw || senderAnalysis.address || ""}
+                </div>
+              </div>
+            </div>
+            <span className="xai-badge">{senderBandLabel}</span>
+          </div>
+
+          {senderFlags.length > 0 ? (
+            <div>
+              {senderFlags.map((f) => (
+                <div key={f.key} className="xai-flag">
+                  <div className="xai-flag__title">{f.title}</div>
+                  <div className="xai-flag__phrases">
+                    {(f.phrases || []).map((p) => (
+                      <span key={p} className="xai-chip">
+                        &ldquo;{p}&rdquo;
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="xai-empty">
+              {senderAnalysis.trusted
+                ? "This sender matches a recognised domain. A pasted address can still be forged, so stay cautious with anything it asks you to do."
+                : "No sender warning signs found."}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Warning signs / Top Reasons */}
+      <div className="xai-card">
+        <div className="xai-card__title">
+          {flags.length > 0
+            ? flagged
+              ? "Warning signs found"
+              : "Worth double-checking"
+            : flagged
+              ? "Why it was flagged"
+              : "Why it looks safe"}
+        </div>
+
+        {flags.length > 0 ? (
+          <div>
+            {flags.map((f) => (
+              <div key={f.key} className="xai-flag">
+                <div className="xai-flag__title">{f.title}</div>
+                <div className="xai-flag__phrases">
+                  {(f.phrases || []).map((p) => (
+                    <span key={p} className="xai-chip">
+                      &ldquo;{p}&rdquo;
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : topReasons.length > 0 ? (
           <div>
             {topReasons.map((r) => {
-              const { Icon, color } = REASON_ICON_MAP[r.key];
-              const widthPct = Math.min(100, Math.abs(r.pct));
+              const { Icon, color } = REASON_ICON_MAP[r.category];
               return (
                 <div
-                  key={r.key}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 10,
-                  }}
+                  key={r.name}
+                  className="xai-reason"
+                  style={{ "--reason-color": color, "--bar": `${r.barPct}%` }}
                 >
-                  <span
-                    style={{
-                      width: 22,
-                      height: 22,
-                      flexShrink: 0,
-                      borderRadius: 6,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: `${color}22`,
-                      color,
-                    }}
-                  >
+                  <span className="xai-reason__icon">
                     <Icon width={12} height={12} />
                   </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 12.5,
-                        color: "#cbd5e1",
-                        marginBottom: 3,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                  <div className="xai-reason__body">
+                    <div className="xai-reason__label" title={r.label}>
                       {r.label}
                     </div>
-                    <div
-                      style={{
-                        height: 6,
-                        background: "#1a2036",
-                        borderRadius: 4,
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${widthPct}%`,
-                          height: "100%",
-                          background: color,
-                          borderRadius: 4,
-                        }}
-                      />
+                    <div className="xai-bar xai-bar--sm">
+                      <div className="xai-bar__fill xai-bar__fill--reason" />
                     </div>
                   </div>
-                  <span
-                    style={{
-                      fontSize: 11.5,
-                      width: 42,
-                      textAlign: "right",
-                      flexShrink: 0,
-                      color: "#8b94ab",
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    {r.pct > 0 ? "+" : ""}
-                    {r.pct.toFixed(0)}%
-                  </span>
+                  <span className="xai-reason__pct">{signedPct(r)}</span>
                 </div>
               );
             })}
           </div>
         ) : (
-          <div style={{ fontSize: 13.5, color: "#8b94ab" }}>
-            {flagged
-              ? "No notable indicators found."
-              : "No suspicious indicators found."}
+          <div className="xai-empty">
+            {lowInfo
+              ? "Not enough content to point to specific indicators."
+              : flagged
+                ? "No single indicator stood out. The score reflects the overall pattern of the message."
+                : "No suspicious indicators found."}
           </div>
         )}
       </div>
 
-      {/* Feature Impact */}
-      <div style={cardStyle}>
-        <div style={cardTitleStyle}>Feature Impact</div>
-        {sortedFeatures.slice(0, 6).map((f) => {
-          const isSpamPush = f.value > 0;
-          const isNegligible = Math.abs(f.value) < NEGLIGIBLE_THRESHOLD;
-          const widthPct = Math.round(
-            Math.min(1, Math.abs(f.value) / REFERENCE_SCALE) * 100,
-          );
-          const scaledPct = (f.value / REFERENCE_SCALE) * 100;
-          return (
-            <div key={f.name} style={{ marginBottom: 8 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 11,
-                  color: "#8b94ab",
-                  marginBottom: 3,
-                }}
-              >
-                <span
-                  style={{
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {f.name}
-                </span>
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    flexShrink: 0,
-                    marginLeft: 6,
-                  }}
-                >
-                  {isNegligible
-                    ? "negligible"
-                    : `${scaledPct > 0 ? "+" : ""}${scaledPct.toFixed(0)}%`}
-                </span>
+      {/* Technical details (collapsed): what the model weighed */}
+      <div className="xai-card">
+        <details>
+          <summary className="xai-card__title xai-details__summary">
+            Technical details: what the model weighed
+          </summary>
+          <div className="xai-details__body">
+            {visibleItems.length === 0 ? (
+              <div className="xai-empty">
+                {items.length === 0
+                  ? "No detailed breakdown is available for this scan."
+                  : "No individual factor was strong enough to list."}
               </div>
-              <div
-                style={{
-                  height: 8,
-                  background: "#1a2036",
-                  borderRadius: 4,
-                  overflow: "hidden",
-                }}
-                title={`${f.name}: ${f.value.toFixed(4)}`}
-              >
-                <div
-                  style={{
-                    width: `${widthPct}%`,
-                    height: "100%",
-                    background: isNegligible
-                      ? "#4b5568"
-                      : isSpamPush
-                        ? "#f43f5e"
-                        : "#34d399",
-                    borderRadius: 4,
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
+            ) : (
+              <>
+                <Legend />
+                {visibleItems.map((f) => {
+                  const tone = f.direction === "phishing" ? "risk" : "safe";
+                  return (
+                    <div key={f.name} className="xai-factor">
+                      <div className="xai-factor__head">
+                        <span className="xai-factor__label" title={f.label}>
+                          {f.label}
+                        </span>
+                        <span className="xai-factor__pct">{signedPct(f)}</span>
+                      </div>
+                      <div
+                        className="xai-bar"
+                        title={`${f.name}: ${f.value.toFixed(4)}`}
+                        style={{ "--bar": `${Math.max(f.barPct, 2)}%` }}
+                      >
+                        <div
+                          className={`xai-bar__fill xai-bar__fill--${tone}`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="xai-footnote">
+                  Percentages show each factor&apos;s share of the model&apos;s
+                  decision, not a probability.
+                </div>
+              </>
+            )}
+          </div>
+        </details>
       </div>
 
       {/* Highlighted Text */}
-      <div style={cardStyle}>
-        <div style={cardTitleStyle}>Highlighted Text</div>
-        <div
-          style={{
-            fontFamily: "monospace",
-            fontSize: 13.5,
-            lineHeight: 1.9,
-            whiteSpace: "pre-wrap",
-            color: "#cbd5e1",
-          }}
-        >
+      <div className="xai-card">
+        <div className="xai-card__title">Highlighted Text</div>
+        {segments ? (
+          <div className="xai-hint">
+            Highlighted phrases are the warning signs listed above.
+          </div>
+        ) : (
+          hasHighlights && <Legend />
+        )}
+        <div className="xai-quote">
           &ldquo;
-          {tokens.map((token, i) => {
-            const key = token.trim().toLowerCase();
-            const weight = weightByWord.get(key);
-            const isNegligibleWord =
-              weight === undefined || Math.abs(weight) < NEGLIGIBLE_THRESHOLD;
-            if (isNegligibleWord || /^\s+$/.test(token)) {
-              return <span key={i}>{token}</span>;
-            }
-            return (
-              <span key={i} style={wordStyle(weight)}>
-                {token}
-              </span>
-            );
-          })}
+          {segments
+            ? segments.map((s, i) =>
+                s.hit ? (
+                  <span key={i} className="xai-flag-mark">
+                    {s.part}
+                  </span>
+                ) : (
+                  <span key={i}>{s.part}</span>
+                ),
+              )
+            : tokens.map((token, i) => {
+                const item = highlightMap.get(token.trim().toLowerCase());
+                if (!item || /^\s+$/.test(token)) {
+                  return <span key={i}>{token}</span>;
+                }
+                return (
+                  <span key={i} {...wordProps(item)} title={item.label}>
+                    {token}
+                  </span>
+                );
+              })}
           &rdquo;
         </div>
+        {!segments && !hasHighlights && (
+          <div className="xai-note">
+            {items.some((i) => i.kind === "token")
+              ? "No individual words influenced the result strongly."
+              : "This result is driven by overall features (see Technical details), not individual words."}
+          </div>
+        )}
       </div>
 
       {/* AI Reasoning */}
-      <div
-        style={{
-          ...cardStyle,
-          background:
-            "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(139,92,246,0.10))",
-          border: "1px solid rgba(99,102,241,0.35)",
-        }}
-      >
-        <div
-          style={{
-            ...cardTitleStyle,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <span
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 6,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(99,102,241,0.18)",
-              color: "#818cf8",
-              fontSize: 12,
-            }}
-          >
-            ✦
-          </span>
+      <div className="xai-card xai-card--reasoning">
+        <div className="xai-card__title xai-reasoning__title">
+          <span className="xai-reasoning__icon">✦</span>
           AI Reasoning
         </div>
-        <div style={{ fontSize: 13.5, color: "#cbd5e1", lineHeight: 1.6 }}>
-          {reasoning}
-        </div>
+        <div className="xai-reasoning__body">{reasoning}</div>
       </div>
     </div>
   );

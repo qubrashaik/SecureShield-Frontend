@@ -1,0 +1,70 @@
+/* =====================================================================
+   index.css  (global styles only)
+   Everything component-specific now lives next to its component:
+     Dashboard.css, AuthLayout.css, AuthBrandPanel.css, ExplainableAIPanel.css,
+     RiskMeter.css, Icons.css, ShieldLogo.css.
+   Replace your old combined file with this one and import it once in main.jsx.
+   ===================================================================== */
+
+:root {
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --panel-border: #e2e8f0;
+  --input-bg: #f8fafc;
+
+  --text-primary: #111827;
+  --text-muted: #111827;
+  --text-faint: #111827;
+
+  --accent-blue: #2563eb;
+  --accent-green: #10b981;
+  --accent-red: #ef4444;
+  --accent-amber: #f59e0b;
+
+  --font-sans:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono:
+    "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top right, #e0ecff 0%, transparent 25%),
+    radial-gradient(circle at bottom left, #eef7ff 0%, transparent 30%),
+    var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Shared primary button (Dashboard "Analyze", Login / Register submit) */
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2);
+  transition: 0.2s;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

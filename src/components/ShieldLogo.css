@@ -1,0 +1,29 @@
+/* =====================================================================
+   ShieldLogo.css
+   Look of the SecureShield shield mark (see ShieldLogo.jsx).
+   Everything follows `currentColor`, so the logo takes the text colour of
+   whatever it sits in (white on the blue header tile, on the brand panel...).
+   Size is set by the `size` prop in the JSX (width/height attributes).
+   ===================================================================== */
+
+.shield-logo {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Shield outline with a light tint of the same colour inside */
+.shield-logo__body {
+  fill: currentColor;
+  fill-opacity: 0.12;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+/* Tick inside the shield */
+.shield-logo__tick {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

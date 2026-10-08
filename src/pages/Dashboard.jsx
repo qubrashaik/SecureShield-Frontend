@@ -8,6 +8,8 @@ import {
   MailWarningIcon,
   ShieldCheckIcon,
 } from "../components/Icons.jsx";
+import ShieldLogo from "../components/ShieldLogo.jsx";
+import "./Dashboard.css";
 
 const TABS = ["EMAIL", "SMS", "URL"];
 
@@ -31,9 +33,13 @@ function isSameDay(dateStr) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("EMAIL");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [text, setText] = useState("");
+  // Email subject + body are merged into one field (content). Sender is
+  // shared by EMAIL and SMS - each tab keeps its own value so switching
+  // tabs doesn't clobber what was typed in the other.
+  const [content, setContent] = useState(""); // EMAIL only
+  const [emailSender, setEmailSender] = useState(""); // EMAIL only
+  const [text, setText] = useState(""); // SMS only
+  const [smsSender, setSmsSender] = useState(""); // SMS only
   const [url, setUrl] = useState("");
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState(null);
@@ -73,20 +79,29 @@ export default function Dashboard() {
   }, [history]);
 
   function currentPayload() {
-    if (activeTab === "EMAIL") return { scanType: "EMAIL", subject, body };
-    if (activeTab === "SMS") return { scanType: "SMS", text };
+    if (activeTab === "EMAIL")
+      return {
+        scanType: "EMAIL",
+        content,
+        sender: emailSender.trim() || undefined,
+      };
+    if (activeTab === "SMS")
+      return {
+        scanType: "SMS",
+        text,
+        sender: smsSender.trim() || undefined,
+      };
     return { scanType: "URL", url };
   }
 
   function currentInputEmpty() {
-    if (activeTab === "EMAIL") return !subject.trim() && !body.trim();
+    if (activeTab === "EMAIL") return !content.trim();
     if (activeTab === "SMS") return !text.trim();
     return !url.trim();
   }
 
   function currentScanText() {
-    if (activeTab === "EMAIL")
-      return [subject, body].filter(Boolean).join("\n");
+    if (activeTab === "EMAIL") return content;
     if (activeTab === "SMS") return text;
     return url;
   }
@@ -124,36 +139,18 @@ export default function Dashboard() {
       <div className="header">
         <div className="brand">
           <div className="brand-mark">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2L4 5v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V5l-8-3z"
-                stroke="#5b8def"
-                strokeWidth="1.6"
-                fill="rgba(59,130,246,0.12)"
-              />
-            </svg>
+            <ShieldLogo size={22} tick={false} />
           </div>
           <div>
             <h1>SecureShield</h1>
             <p>AI-powered phishing &amp; spam detection</p>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div className="header-actions">
           <span className="status-pill">
             <span className="status-dot" /> MODEL ONLINE
           </span>
-          <button
-            onClick={handleLogout}
-            style={{
-              background: "transparent",
-              border: "1px solid var(--panel-border)",
-              color: "var(--text-muted)",
-              borderRadius: 7,
-              padding: "6px 12px",
-              fontSize: 12.5,
-              cursor: "pointer",
-            }}
-          >
+          <button type="button" className="btn-logout" onClick={handleLogout}>
             Log out
           </button>
         </div>
@@ -212,13 +209,21 @@ export default function Dashboard() {
           </div>
 
           <div className="content-box">
-            {activeTab === "EMAIL" && (
+            {(activeTab === "EMAIL" || activeTab === "SMS") && (
               <div className="field-row">
-                <span className="field-label">Subject:</span>
+                <span className="field-label">Sender:</span>
                 <input
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Your account has been suspended"
+                  value={activeTab === "EMAIL" ? emailSender : smsSender}
+                  onChange={(e) =>
+                    activeTab === "EMAIL"
+                      ? setEmailSender(e.target.value)
+                      : setSmsSender(e.target.value)
+                  }
+                  placeholder={
+                    activeTab === "EMAIL"
+                      ? "PayPal Support <help@paypa1-secure.xyz>"
+                      : "+91XXXXXXXXXX or VM-HDFCBK"
+                  }
                 />
               </div>
             )}
@@ -234,15 +239,15 @@ export default function Dashboard() {
             )}
             {activeTab !== "URL" && (
               <textarea
-                value={activeTab === "EMAIL" ? body : text}
+                value={activeTab === "EMAIL" ? content : text}
                 onChange={(e) =>
                   activeTab === "EMAIL"
-                    ? setBody(e.target.value)
+                    ? setContent(e.target.value)
                     : setText(e.target.value)
                 }
                 placeholder={
                   activeTab === "EMAIL"
-                    ? "Dear user, we detected unusual sign-in activity. Click the link below within 24 hours..."
+                    ? "Subject: Your account has been suspended\n\nDear user, we detected unusual sign-in activity. Click the link below within 24 hours..."
                     : "URGENT! You've won a prize, claim now..."
                 }
               />
@@ -270,7 +275,7 @@ export default function Dashboard() {
           )}
 
           {error && (
-            <div className="auth-error" style={{ marginTop: 16 }}>
+            <div className="scan-error" role="alert">
               {error}
             </div>
           )}
@@ -291,12 +296,19 @@ export default function Dashboard() {
         <div className="panel">
           <p className="panel-title">Why this prediction (XAI)</p>
 
-          {result?.topFeatures?.length ? (
+          {result ? (
             <ExplainableAIPanel
               text={scannedText}
-              features={result.topFeatures}
+              features={result.topFeatures ?? []}
               label={result.label}
               confidence={result.confidence}
+              method={result.method}
+              phishingProbability={result.phishingProbability}
+              riskLevel={result.riskLevel}
+              reliability={result.reliability}
+              redFlags={result.redFlags ?? []}
+              senderAnalysis={result.senderAnalysis ?? null}
+              scanType={resultScanType}
             />
           ) : null}
 
